@@ -65,7 +65,7 @@ struct Connection: Identifiable, Codable, Hashable {
     var rows: Int = 25
     var fontSize: Double = 14
     var theme: TermTheme = .dark
-    var backspaceSendsCtrlH: Bool = false
+    var backspaceSendsCtrlH: Bool = true // ^H, like KoalaTerm; Unixfor ignores DEL
     var macros: [KeyMacro] = KeyMacro.koalaCommon
 
     static let terminalTypes = ["vt220", "vt100", "vt320", "xterm", "ansi"]
@@ -120,6 +120,7 @@ final class ConnectionStore: ObservableObject {
         if let data = try? Data(contentsOf: fileURL),
            let list = try? JSONDecoder().decode([Connection].self, from: data) {
             connections = Self.migrate(list)
+            save() // didSet doesn't fire in init; persist the migrated list
         } else {
             connections = Connection.defaults
         }
@@ -128,6 +129,18 @@ final class ConnectionStore: ObservableObject {
     /// v2: entries that share a name with a bundled default take its host, keys and macros
     /// (e.g. a host that moved). Runs once per Mac.
     private static func migrate(_ list: [Connection]) -> [Connection] {
+        var list = migrateV2(list)
+        // v3: Unixfor on AIX erases with ^H and ignores DEL (verified on THETIS), and ^H is
+        // KoalaTerm's default, so every existing connection switches to ^H once.
+        let v3 = "migratedV3"
+        if !UserDefaults.standard.bool(forKey: v3) {
+            UserDefaults.standard.set(true, forKey: v3)
+            list = list.map { var c = $0; c.backspaceSendsCtrlH = true; return c }
+        }
+        return list
+    }
+
+    private static func migrateV2(_ list: [Connection]) -> [Connection] {
         let key = "migratedV2"
         guard !UserDefaults.standard.bool(forKey: key) else { return list }
         UserDefaults.standard.set(true, forKey: key)

@@ -187,7 +187,7 @@ struct ConnectionEditor: View {
                     Picker("Colors", selection: $connection.theme) {
                         ForEach(TermTheme.allCases) { Text($0.label).tag($0) }
                     }
-                    Toggle("Backspace sends Ctrl-H", isOn: $connection.backspaceSendsCtrlH)
+                    Toggle("Backspace sends Ctrl-H (off = DEL)", isOn: $connection.backspaceSendsCtrlH)
                 }
                 Section {
                     ForEach($connection.macros) { $m in

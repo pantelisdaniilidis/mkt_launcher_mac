@@ -89,6 +89,12 @@ final class TerminalSession: NSObject, NSWindowDelegate, TerminalViewDelegate {
     /// and ⌘Q ⌘W ⌘H ⌘M keep their usual Mac meaning. Real Ctrl keeps working too.
     private func handleKey(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        // Backspace: send exactly what the connection wants (Unixfor/AIX erase with ^H, ignore DEL).
+        if event.keyCode == 51, flags.isSubset(of: [.shift]),
+           !connection.macros.contains(where: { $0.matches(event) }) {
+            if telnet.isConnected { telnet.send([connection.backspaceSendsCtrlH ? 0x08 : 0x7F]) }
+            return true
+        }
         if flags == .command, let letter = KeyMacro.letter(forKeyCode: event.keyCode) {
             switch letter {
             case "V":
@@ -155,6 +161,9 @@ final class TerminalSession: NSObject, NSWindowDelegate, TerminalViewDelegate {
            s.count == 2, let w = Double(s[0]), let h = Double(s[1]) {
             window.setContentSize(NSSize(width: w, height: h))
         }
+        if ProcessInfo.processInfo.environment["MKT_KEY_TEST"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in self?.runKeyTest() }
+        }
         if let mode = ProcessInfo.processInfo.environment["MKT_RESIZE_TEST"] {
             // Resize the visible window repeatedly, then go full screen and back.
             let sizes: [NSSize] = [.init(width: 900, height: 600), .init(width: 1400, height: 900),
@@ -176,6 +185,41 @@ final class TerminalSession: NSObject, NSWindowDelegate, TerminalViewDelegate {
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(termView)
     }
+
+    #if MKT_DEBUG
+    /// Posts synthetic key presses through the normal event path (monitor + terminal view).
+    private func runKeyTest() {
+        let pb = NSPasteboard.general
+        let savedClipboard = pb.string(forType: .string)
+        pb.clearContents()
+        pb.setString("Γειά\nx", forType: .string)
+        let f5 = String(Character(UnicodeScalar(UInt32(NSF5FunctionKey))!))
+        let keys: [(UInt16, NSEvent.ModifierFlags, String)] = [
+            (0, [], "a"), (11, [], "b"), (51, [], "\u{7f}"),     // a b Backspace
+            (6, [.command], "z"),                                // ⌘Z
+            (48, [.shift], "\u{19}"),                            // ⇧Tab
+            (96, [.function], f5),                               // F5
+            (0, [], "α"),                                        // Greek alpha
+            (9, [.command], "v"),                                // ⌘V
+        ]
+        for (code, flags, chars) in keys {
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                if let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags,
+                                            timestamp: ProcessInfo.processInfo.systemUptime,
+                                            windowNumber: window.windowNumber, context: nil,
+                                            characters: chars, charactersIgnoringModifiers: chars,
+                                            isARepeat: false, keyCode: code) {
+                    NSApp.postEvent(e, atStart: false)
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            pb.clearContents()
+            if let s = savedClipboard { pb.setString(s, forType: .string) }
+            NSLog("MKT_KEY_TEST done")
+        }
+    }
+    #endif
 
     private func applyTheme(_ theme: TermTheme) {
         switch theme {
