@@ -1,0 +1,11 @@
+[
+  {
+    "name": "EXAMPLE",
+    "host": "erp.example.com",
+    "port": 23,
+    "terminalType": "vt220",
+    "encoding": "iso-8859-7",
+    "columns": 80,
+    "rows": 25
+  }
+]

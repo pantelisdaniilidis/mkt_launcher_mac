@@ -1,0 +1,14 @@
+# Build output and fetched dependencies
+build/
+.build/
+Vendor/
+*.xcodeproj/
+.swiftpm/
+.DS_Store
+
+# Original KoalaTerm package (commercial binary + license key) – never commit
+*.rar
+Terminals/
+
+# Real company hosts – copy Config/connections.example.json to this name locally
+Config/connections.json
