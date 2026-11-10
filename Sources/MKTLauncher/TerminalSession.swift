@@ -155,6 +155,23 @@ final class TerminalSession: NSObject, NSWindowDelegate, TerminalViewDelegate {
            s.count == 2, let w = Double(s[0]), let h = Double(s[1]) {
             window.setContentSize(NSSize(width: w, height: h))
         }
+        if let mode = ProcessInfo.processInfo.environment["MKT_RESIZE_TEST"] {
+            // Resize the visible window repeatedly, then go full screen and back.
+            let sizes: [NSSize] = [.init(width: 900, height: 600), .init(width: 1400, height: 900),
+                                   .init(width: 500, height: 300), .init(width: 1200, height: 700)]
+            for (i, s) in sizes.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 + Double(i) * 0.5) { [weak self] in
+                    self?.window.setContentSize(s)
+                    NSLog("MKT_RESIZE_TEST size \(s)")
+                }
+            }
+            if mode == "fs" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in self?.window.toggleFullScreen(nil) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 7.0) { [weak self] in
+                NSLog("MKT_RESIZE_TEST fullscreen frame \(self?.window.frame ?? .zero)")
+            }
+        }
         #endif
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(termView)

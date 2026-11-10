@@ -24,26 +24,33 @@ final class FitContainer: NSView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    private var isLayingOut = false
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         relayout()
     }
 
-    override func viewDidChangeBackingProperties() {
-        super.viewDidChangeBackingProperties()
-        relayout()
-    }
+    // Note: no viewDidChangeBackingProperties override. setBoundsSize itself triggers that
+    // callback, and relayouting from it recursed until the stack overflowed (crash on resize).
 
     private func relayout() {
-        guard naturalSize.width > 0, naturalSize.height > 0,
+        guard !isLayingOut,
+              naturalSize.width > 0, naturalSize.height > 0,
               frame.width > 0, frame.height > 0 else { return }
+        isLayingOut = true
+        defer { isLayingOut = false }
+
         let scale = min(frame.width / naturalSize.width, frame.height / naturalSize.height)
         // Scale the coordinate system: the terminal keeps its frame (and its rows/columns),
         // AppKit draws it larger. Text is re-rendered at the new size, so it stays sharp.
-        setBoundsSize(NSSize(width: frame.width / scale, height: frame.height / scale))
-        content.setFrameOrigin(NSPoint(x: ((bounds.width - naturalSize.width) / 2).rounded(),
-                                       y: ((bounds.height - naturalSize.height) / 2).rounded()))
+        let target = NSSize(width: frame.width / scale, height: frame.height / scale)
+        if abs(bounds.width - target.width) > 0.01 || abs(bounds.height - target.height) > 0.01 {
+            setBoundsSize(target)
+        }
+        let origin = NSPoint(x: ((bounds.width - naturalSize.width) / 2).rounded(),
+                             y: ((bounds.height - naturalSize.height) / 2).rounded())
+        if content.frame.origin != origin { content.setFrameOrigin(origin) }
         needsDisplay = true
-        content.needsDisplay = true
     }
 }
